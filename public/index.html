@@ -1015,8 +1015,12 @@
     }
 
     function handleWsIncoming(data) {
-      if (data.type === 'TRANSCRIPT' || data.text) {
-        appendTranscriptLog(data.text || JSON.stringify(data));
+      if (data.type === 'TRANSCRIPT_FINAL' || data.type === 'TRANSCRIPT' || (data.chunk && data.chunk.text)) {
+        const text = data.chunk?.text || data.text;
+        appendTranscriptLog(text);
+        clearPartialTranscript();
+      } else if (data.type === 'TRANSCRIPT_PARTIAL') {
+        renderPartialTranscript(data.text);
       } else if (data.type === 'NOTE_CHUNK' || data.note) {
         appendLiveNote(data.note || data.content || JSON.stringify(data));
       } else if (data.type === 'ANSWER' || data.answer) {
@@ -1027,6 +1031,24 @@
       } else {
         appendTranscriptLog(`[Message] ${JSON.stringify(data)}`);
       }
+    }
+
+    function renderPartialTranscript(text) {
+      let preview = document.getElementById('partialTranscriptPreview');
+      const box = document.getElementById('liveTranscriptBox');
+      if (!preview) {
+        preview = document.createElement('div');
+        preview.id = 'partialTranscriptPreview';
+        preview.className = 'py-0.5 text-blue-300 italic animate-pulse';
+        box.appendChild(preview);
+      }
+      preview.textContent = `[Speaking...]: ${text}`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function clearPartialTranscript() {
+      const preview = document.getElementById('partialTranscriptPreview');
+      if (preview) preview.remove();
     }
 
     function appendTranscriptLog(text) {
@@ -1073,42 +1095,156 @@
       showToast('Question sent to lecture AI assistant!');
     }
 
-    // Microphone Recording
+    // Microphone & Audio Streaming (16kHz Linear PCM + Web Speech Hybrid)
+    let audioContext = null;
+    let audioStream = null;
+    let audioProcessor = null;
+    let speechRecognizer = null;
+    let isRecordingAudio = false;
+
     async function toggleMicrophone() {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
+      if (isRecordingAudio) {
         stopMicrophone();
       } else {
         startMicrophone();
       }
     }
 
+    function downsampleTo16k(inputData, sampleRate) {
+      if (sampleRate === 16000) {
+        const pcm = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          let s = Math.max(-1, Math.min(1, inputData[i]));
+          pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return pcm.buffer;
+      }
+      const ratio = sampleRate / 16000;
+      const newLength = Math.round(inputData.length / ratio);
+      const pcm = new Int16Array(newLength);
+      let offsetResult = 0;
+      let offsetBuffer = 0;
+      while (offsetResult < newLength) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+        let accum = 0, count = 0;
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < inputData.length; i++) {
+          accum += inputData[i];
+          count++;
+        }
+        const sample = count > 0 ? accum / count : 0;
+        const s = Math.max(-1, Math.min(1, sample));
+        pcm[offsetResult] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+      }
+      return pcm.buffer;
+    }
+
     async function startMicrophone() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0 && liveSocket && liveSocket.readyState === WebSocket.OPEN) {
-            liveSocket.send(e.data);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+        audioStream = stream;
+
+        // 1. Web Audio API for raw 16kHz PCM streaming to Sarvam
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+        audioProcessor.onaudioprocess = (e) => {
+          if (!liveSocket || liveSocket.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          const pcmBuffer = downsampleTo16k(input, audioContext.sampleRate);
+          if (pcmBuffer.byteLength > 0) {
+            liveSocket.send(pcmBuffer);
           }
         };
-        mediaRecorder.start(250); // send chunks every 250ms
 
+        source.connect(audioProcessor);
+        audioProcessor.connect(audioContext.destination);
+
+        // 2. Web Speech API for instant browser speech recognition
+        startBrowserSpeech();
+
+        isRecordingAudio = true;
         document.getElementById('micRecordingIndicator').classList.remove('hidden');
         document.getElementById('btnMicText').textContent = 'Stop Mic';
         document.getElementById('btnToggleMic').classList.remove('bg-blue-600');
         document.getElementById('btnToggleMic').classList.add('bg-rose-600', 'hover:bg-rose-700');
-        showToast('Microphone recording & streaming live audio.');
+        showToast('Microphone active! Speak now to transcribe.');
       } catch (err) {
-        showToast(`Microphone access error: ${err.message}`, 'error');
+        showToast(`Microphone error: ${err.message}`, 'error');
+      }
+    }
+
+    function startBrowserSpeech() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+
+      try {
+        speechRecognizer = new SpeechRecognition();
+        speechRecognizer.continuous = true;
+        speechRecognizer.interimResults = true;
+        speechRecognizer.lang = 'en-IN';
+
+        speechRecognizer.onresult = (event) => {
+          let interim = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              if (liveSocket && liveSocket.readyState === WebSocket.OPEN && transcript.trim()) {
+                liveSocket.send(JSON.stringify({ type: 'TRANSCRIPT_TEXT', text: transcript.trim() }));
+              }
+            } else {
+              interim += transcript;
+            }
+          }
+          if (interim) {
+            renderPartialTranscript(interim);
+          }
+        };
+
+        speechRecognizer.onerror = (e) => {
+          console.warn('Speech recognition status:', e.error);
+        };
+
+        speechRecognizer.onend = () => {
+          if (isRecordingAudio) {
+            try { speechRecognizer.start(); } catch {}
+          }
+        };
+
+        speechRecognizer.start();
+      } catch (err) {
+        console.warn('Web Speech API unavailable:', err);
       }
     }
 
     function stopMicrophone() {
-      if (mediaRecorder) {
-        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(t => t.stop());
-        mediaRecorder = null;
+      isRecordingAudio = false;
+      if (speechRecognizer) {
+        try { speechRecognizer.stop(); } catch {}
+        speechRecognizer = null;
       }
+      if (audioProcessor) {
+        try { audioProcessor.disconnect(); } catch {}
+        audioProcessor = null;
+      }
+      if (audioContext) {
+        try { audioContext.close(); } catch {}
+        audioContext = null;
+      }
+      if (audioStream) {
+        audioStream.getTracks().forEach(t => t.stop());
+        audioStream = null;
+      }
+      clearPartialTranscript();
       document.getElementById('micRecordingIndicator').classList.add('hidden');
       document.getElementById('btnMicText').textContent = 'Start Mic';
       document.getElementById('btnToggleMic').classList.remove('bg-rose-600', 'hover:bg-rose-700');

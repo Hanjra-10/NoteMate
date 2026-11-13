@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { redis } from '../lib/redis.js';
 
 const SARVAM_URL =
-    'wss://api.sarvam.ai/speech-to-text-realtime/ws?language_code=en-IN&mode=codemix&stream_type=fast';
+    'wss://api.sarvam.ai/speech-to-text-realtime/ws?model=saaras:v3-realtime&language_code=en-IN&encoding=linear16&sample_rate=16000&mode=codemix&stream_type=fast';
 
 export const transcriptStreamKey = (sessionId) => `stream:transcripts:${sessionId}`;
 
@@ -55,12 +55,23 @@ export class LiveTranscriptionManager {
     }
 
     async handleSarvamMessage(data) {
-        const msg = JSON.parse(data.toString());
+        let msg;
+        try {
+            msg = JSON.parse(data.toString());
+        } catch {
+            return;
+        }
+
+        const text = msg.transcript || msg.text || '';
 
         if (msg.event === 'transcript.partial') {
-            this.sendToClient({ type: 'TRANSCRIPT_PARTIAL', text: msg.text });
-        } else if (msg.event === 'transcript.final' && msg.text?.trim()) {
-            await this.commitFinal(msg.text);
+            if (text) {
+                this.sendToClient({ type: 'TRANSCRIPT_PARTIAL', text });
+            }
+        } else if (msg.event === 'transcript.final') {
+            if (text.trim()) {
+                await this.commitFinal(text);
+            }
         } else if (msg.event === 'error') {
             console.error(`Sarvam API error (${msg.code}): ${msg.message}`);
         }
