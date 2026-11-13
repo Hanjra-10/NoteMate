@@ -48,6 +48,28 @@ export function initWebSocketServer(server) {
         const transcription = new LiveTranscriptionManager(sessionId, clientWs);
         const stopNoteWorker = processTranscriptStream(sessionId, clientWs);
 
+        // Send existing notes and recent transcripts on connect
+        Promise.all([
+            prisma.noteChunk.findMany({
+                where: { sessionId },
+                orderBy: { sortOrder: 'asc' }
+            }),
+            prisma.transcriptChunk.findMany({
+                where: { sessionId },
+                orderBy: { sequence: 'asc' },
+                take: 20
+            })
+        ]).then(([notes, transcripts]) => {
+            if (clientWs.readyState === WebSocket.OPEN) {
+                if (notes.length > 0) {
+                    clientWs.send(JSON.stringify({ type: 'NOTE_BLOCKS_UPDATED', blocks: notes }));
+                }
+                if (transcripts.length > 0) {
+                    clientWs.send(JSON.stringify({ type: 'RECENT_TRANSCRIPTS', chunks: transcripts }));
+                }
+            }
+        }).catch((err) => console.error('Initial session data error:', err.message));
+
         let stopping = null;
         const stop = () => (stopping ??= (async () => {
             try {

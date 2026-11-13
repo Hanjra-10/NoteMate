@@ -5,8 +5,8 @@ import { transcriptStreamKey } from '../services/transcriptionService.js';
 
 const STREAM_GROUP = 'note_generators';
 const CONSUMER_NAME = `worker_${process.pid}`;
-const READ_BLOCK_MS = 2000;     // max idle wait for new transcript lines
-const FLUSH_EVERY_MS = 10000;   // at most one note update per this interval
+const READ_BLOCK_MS = 1500;     // max idle wait for new transcript lines
+const FLUSH_EVERY_MS = 3000;    // generate notes every 3 seconds of new speech
 const WS_OPEN = 1;
 
 export function processTranscriptStream(sessionId, clientWs) {
@@ -50,6 +50,8 @@ export function processTranscriptStream(sessionId, clientWs) {
             await redis.xack(streamKey, STREAM_GROUP, ...batch.map(b => b.id));
 
             batch = [];
+
+            console.log(`[Note Worker] Generated ${changedBlocks.length} note blocks for session ${sessionId}`);
 
             if (clientWs.readyState === WS_OPEN) {
                 clientWs.send(JSON.stringify({ type: 'NOTE_BLOCKS_UPDATED', blocks: changedBlocks }));

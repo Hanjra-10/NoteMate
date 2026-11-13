@@ -35,21 +35,21 @@ export async function generateIncrementalNotes(sessionId, newTranscriptText) {
     }));
 
     const prompt = `
-You are an academic note generator. Update structured Markdown notes for a live lecture session.
+You are an academic lecture note generator. Update structured Markdown notes for a live lecture session based on incoming transcripts.
 
 CURRENT NOTE BLOCKS:
 ${JSON.stringify(outline, null, 2)}
 
-NEW TRANSCRIPT BATCH (Hinglish):
+NEW TRANSCRIPT BATCH:
 "${newTranscriptText}"
 
 INSTRUCTIONS:
 1. Review the new transcript batch.
 2. Decide whether to:
-   - "CREATE": Add a new concept as a new note block.
-   - "UPDATE": Rewrite an existing block identified by its ID. Return its COMPLETE new content: preserve all previously written information and integrate the new insights cleanly.
-   - "IGNORE": Skip non-academic conversation, repetition, or administrative banter.
-3. Write clean, professional academic English.
+   - "CREATE": Summarize new topics or key concepts as a new note block with an informative heading and detailed Markdown bullet points.
+   - "UPDATE": Rewrite an existing block identified by its noteChunkId. Return its COMPLETE new content: preserve all previously written information and integrate the new insights cleanly.
+   - "IGNORE": Only use IGNORE if the text is pure noise or completely devoid of substantive words. If the speaker is explaining any concept, always capture it.
+3. Write clean, professional structured academic Markdown. Include bold key terms, definitions, and concise bullet points.
 4. Return ONLY structured operations matching the required JSON schema.
 `;
 
