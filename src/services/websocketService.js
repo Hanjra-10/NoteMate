@@ -24,10 +24,19 @@ export function initWebSocketServer(server) {
             const user = authenticateWs(request);
             if (!user) return reject(socket, 401, 'Unauthorized');
 
-            const sessionId = new URL(request.url, 'http://localhost').searchParams.get('sessionId');
+            const sessionId = new URL(request.url, 'http://' + (request.headers.host || 'localhost')).searchParams.get('sessionId');
             const session = sessionId && await validateSessionAccess(user.id, sessionId);
-            if (!session || session.status !== 'LIVE') {
-                return reject(socket, 404, 'Live session not found');
+            if (!session) {
+                console.warn(`[WS Upgrade] Session ${sessionId} not found or unauthorized for user ${user.id}`);
+                return reject(socket, 404, 'Session not found');
+            }
+
+            if (session.status !== 'LIVE') {
+                console.log(`[WS Upgrade] Session ${sessionId} was ${session.status}, re-opening to LIVE`);
+                await prisma.lectureSession.update({
+                    where: { id: session.id },
+                    data: { status: 'LIVE' }
+                });
             }
 
             await liveSessions.get(session.id)?.stop();
@@ -85,8 +94,8 @@ export function initWebSocketServer(server) {
         liveSessions.set(sessionId, { stop });
 
         transcription.initialize().catch((err) => {
-            console.error('Transcription init error:', err);
-            clientWs.close();
+            console.error('Transcription init notice:', err.message);
+            // Keep clientWs connected so speech recognition and text ingestion continue smoothly
         });
 
         clientWs.on('error', (err) => console.error('Client WS error:', err.message));

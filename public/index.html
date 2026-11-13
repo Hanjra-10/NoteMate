@@ -42,6 +42,12 @@
     .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scroll::-webkit-scrollbar-track { background: #f8fafc; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    @media print {
+      body * { visibility: hidden; }
+      #sessionDetailModal, #sessionDetailModal * { visibility: visible; }
+      #sessionDetailModal { position: absolute; left: 0; top: 0; width: 100%; max-height: none; box-shadow: none; border: none; background: white; }
+      header, button, select, input, textarea, footer, #modalEndSessionBtn { display: none !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
@@ -875,6 +881,11 @@
     }
 
     function connectLiveWebSocket() {
+      if (!currentToken) {
+        showToast('Please sign in first before connecting.', 'error');
+        openAuthModal('login');
+        return;
+      }
       const select = document.getElementById('liveSessionSelect');
       const sessionId = select.value;
       if (!sessionId) {
@@ -885,7 +896,7 @@
       disconnectLiveWebSocket();
 
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/?token=${currentToken}&sessionId=${sessionId}`;
+      const wsUrl = `${wsProtocol}//${window.location.host}/?token=${encodeURIComponent(currentToken)}&sessionId=${encodeURIComponent(sessionId)}`;
 
       const badge = document.getElementById('wsStatusBadge');
       badge.textContent = 'Connecting...';

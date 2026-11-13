@@ -12,13 +12,14 @@ export function authenticateToken(req, res, next) {
     });
 }
 export function authenticateWs(req) {
-    const url = new URL(req.url, `http://${req.headers.host}`);
+    const host = req.headers['host'] || 'localhost';
+    const url = new URL(req.url, `http://${host}`);
     const token = url.searchParams.get('token');
     if (!token) return null;
     try {
         return jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
-        console.log('error: cannot verify ws req');
+        console.warn('WS auth verify error:', err.message);
         return null;
     }
 }
