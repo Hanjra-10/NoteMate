@@ -1,0 +1,90 @@
+datasource db {
+    provider   = "postgresql"
+    url        = env("DATABASE_URL")
+    directUrl  = env("DIRECT_URL")
+    extensions = [vector]
+}
+
+generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["postgresqlExtensions"]
+}
+
+enum SessionStatus {
+    LIVE
+    PROCESSING
+    COMPLETED
+    FAILED
+}
+
+enum TranscriptStatus {
+    PENDING
+    PROCESSED
+    FAILED
+}
+
+model User {
+    id        String    @id @default(uuid())
+    email     String    @unique
+    name      String    
+    password  String
+    subjects  Subject[]
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+}
+
+model Subject {
+    id        String           @id @default(uuid())
+    userId    String
+    user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+    name      String
+    sessions  LectureSession[]
+    createdAt DateTime         @default(now())
+    updatedAt DateTime         @updatedAt
+
+    @@index([userId])
+}
+
+model LectureSession {
+    id               String            @id @default(uuid())
+    subjectId        String
+    subject          Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+    title            String
+    status           SessionStatus     @default(LIVE)
+    startedAt        DateTime          @default(now())
+    endedAt          DateTime?
+    noteChunks       NoteChunk[]
+    transcriptChunks TranscriptChunk[]
+    createdAt        DateTime          @default(now())
+
+    @@index([subjectId, status])
+}
+
+model NoteChunk {
+    id               String                      @id @default(uuid())
+    sessionId        String
+    session          LectureSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    heading          String
+    content          String
+    sortOrder        Int
+    embedding        Unsupported("vector(768)")?
+    version          Int                         @default(1)
+    embeddingVersion Int                         @default(0)
+    createdAt        DateTime                    @default(now())
+    updatedAt        DateTime                    @updatedAt
+
+    @@index([sessionId, sortOrder])
+}
+
+model TranscriptChunk {
+    id          String           @id @default(uuid())
+    sessionId   String
+    session     LectureSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    sequence    Int
+    text        String
+    status      TranscriptStatus @default(PENDING)
+    createdAt   DateTime         @default(now())
+    processedAt DateTime?
+
+    @@index([sessionId, sequence])
+}
