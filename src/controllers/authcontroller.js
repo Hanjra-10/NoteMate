@@ -3,9 +3,10 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const JWT_SECRET = process.env.JWT_SECRET || 'notemate-production-jwt-secret-fallback-key';
 
 function signToken(user) {
-    return jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 }
 
 export async function register(req, res) {

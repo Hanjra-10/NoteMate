@@ -183,7 +183,16 @@
               <h3 id="modalSessionTitle" class="text-xl font-bold text-slate-900 mt-1">Lecture Session</h3>
               <p id="modalSessionDate" class="text-xs text-slate-500"></p>
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <button onclick="downloadSessionMarkdown()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl transition flex items-center space-x-1" title="Download Markdown">
+                <span>📥</span> <span>.md</span>
+              </button>
+              <button onclick="printSessionNotes()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl transition flex items-center space-x-1" title="Export PDF">
+                <span>🖨️</span> <span>PDF</span>
+              </button>
+              <button onclick="openQuizModal()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition flex items-center space-x-1 shadow-xs">
+                <span>🧠</span> <span>Quiz & Flashcards</span>
+              </button>
               <button id="modalEndSessionBtn" onclick="handleEndSession()" class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition">
                 End & Finalize
               </button>
@@ -207,6 +216,44 @@
                 <div class="text-slate-400 italic">No transcript chunks recorded.</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive AI Quiz & Flashcards Modal -->
+      <div id="quizModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+          <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-indigo-50/70">
+            <div>
+              <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">Gemini Study Copilot</span>
+              <h3 class="text-xl font-bold text-slate-900 mt-1">Practice Quiz & Flashcards</h3>
+            </div>
+            <button onclick="closeQuizModal()" class="p-2 text-slate-400 hover:text-slate-600">
+              ✕
+            </button>
+          </div>
+
+          <!-- Tabs: Quiz vs Flashcards -->
+          <div class="flex border-b border-slate-200 px-6 pt-3 bg-slate-50 gap-4">
+            <button id="studyTabBtnQuiz" onclick="switchStudyTab('quiz')" class="pb-3 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600">
+              Practice Quiz (<span id="quizCountBadge">0</span>)
+            </button>
+            <button id="studyTabBtnFlashcards" onclick="switchStudyTab('flashcards')" class="pb-3 text-xs font-bold border-b-2 border-transparent text-slate-500">
+              Flashcards (<span id="flashcardCountBadge">0</span>)
+            </button>
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scroll" id="quizModalBody">
+            <div id="quizLoadingState" class="py-12 text-center text-slate-400 flex flex-col items-center space-y-3">
+              <span class="w-6 h-6 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin"></span>
+              <span class="text-sm font-semibold">Gemini AI is analyzing lecture notes and generating your study materials...</span>
+            </div>
+
+            <!-- Quiz Questions Section -->
+            <div id="quizQuestionsContainer" class="hidden space-y-6"></div>
+
+            <!-- Flashcards Section -->
+            <div id="flashcardsContainer" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4"></div>
           </div>
         </div>
       </div>
@@ -796,9 +843,24 @@
         const notesContainer = document.getElementById('modalSessionNotes');
         if (session.noteChunks && session.noteChunks.length > 0) {
           notesContainer.innerHTML = session.noteChunks.map(chunk => `
-            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <div class="text-xs font-bold text-blue-600 uppercase tracking-wide">Section ${chunk.sortOrder + 1}</div>
-              <div class="prose max-w-none text-sm text-slate-800">${marked.parse(chunk.content || '')}</div>
+            <div id="noteChunk-${chunk.id}" class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-indigo-600 uppercase tracking-wide">${chunk.heading || `Section ${chunk.sortOrder + 1}`}</span>
+                <button onclick="enableNoteEdit('${chunk.id}')" class="text-xs font-semibold text-slate-400 hover:text-indigo-600 transition">
+                  ✏️ Edit
+                </button>
+              </div>
+              <div id="noteContent-${chunk.id}" class="prose max-w-none text-sm text-slate-800">${marked.parse(chunk.content || '')}</div>
+              <div id="noteEditForm-${chunk.id}" class="hidden space-y-2 pt-2">
+                <input id="noteEditHeading-${chunk.id}" type="text" value="${(chunk.heading || '').replace(/"/g, '&quot;')}" placeholder="Heading"
+                  class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                <textarea id="noteEditText-${chunk.id}" rows="4" placeholder="Content in Markdown"
+                  class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500">${(chunk.content || '').replace(/</g, '&lt;')}</textarea>
+                <div class="flex justify-end gap-2">
+                  <button onclick="cancelNoteEdit('${chunk.id}')" class="px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-slate-700">Cancel</button>
+                  <button onclick="saveNoteEdit('${chunk.id}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-xs">Save</button>
+                </div>
+              </div>
             </div>
           `).join('');
         } else {
@@ -822,6 +884,152 @@
       } catch (err) {
         showToast(err.message, 'error');
       }
+    }
+
+    function enableNoteEdit(id) {
+      document.getElementById(`noteContent-${id}`).classList.add('hidden');
+      document.getElementById(`noteEditForm-${id}`).classList.remove('hidden');
+    }
+
+    function cancelNoteEdit(id) {
+      document.getElementById(`noteContent-${id}`).classList.remove('hidden');
+      document.getElementById(`noteEditForm-${id}`).classList.add('hidden');
+    }
+
+    async function saveNoteEdit(id) {
+      const heading = document.getElementById(`noteEditHeading-${id}`).value.trim();
+      const content = document.getElementById(`noteEditText-${id}`).value.trim();
+      try {
+        await apiRequest(`/api/notes/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ heading, content })
+        });
+        const chunk = currentViewingSession?.noteChunks?.find(c => c.id === id);
+        if (chunk) { chunk.heading = heading; chunk.content = content; }
+        document.getElementById(`noteContent-${id}`).innerHTML = marked.parse(content || '');
+        cancelNoteEdit(id);
+        showToast('Note block updated successfully!');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function downloadSessionMarkdown() {
+      if (!currentViewingSession) return;
+      const s = currentViewingSession;
+      let md = `# ${s.title}\n*Date: ${new Date(s.createdAt).toLocaleString()}*\n\n---\n\n`;
+      if (s.noteChunks && s.noteChunks.length > 0) {
+        s.noteChunks.forEach(c => {
+          md += `## ${c.heading || 'Key Concept'}\n\n${c.content}\n\n`;
+        });
+      } else {
+        md += `*No notes generated yet.*\n`;
+      }
+      const blob = new Blob([md], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${s.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_notes.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Downloaded Markdown notes!');
+    }
+
+    function printSessionNotes() {
+      window.print();
+    }
+
+    // AI Quiz & Flashcards
+    let currentStudyMaterials = null;
+
+    async function openQuizModal() {
+      if (!currentViewingSession) return;
+      document.getElementById('quizModal').classList.remove('hidden');
+      document.getElementById('quizLoadingState').classList.remove('hidden');
+      document.getElementById('quizQuestionsContainer').classList.add('hidden');
+      document.getElementById('flashcardsContainer').classList.add('hidden');
+
+      try {
+        const res = await apiRequest(`/api/sessions/${currentViewingSession.id}/quiz`, { method: 'POST' });
+        currentStudyMaterials = res.data;
+        document.getElementById('quizLoadingState').classList.add('hidden');
+        renderQuizQuestions(currentStudyMaterials.quiz || []);
+        renderFlashcards(currentStudyMaterials.flashcards || []);
+        switchStudyTab('quiz');
+      } catch (err) {
+        document.getElementById('quizLoadingState').innerHTML = `<div class="text-rose-600 font-semibold p-4 bg-rose-50 rounded-xl">Failed to generate study materials: ${err.message}</div>`;
+      }
+    }
+
+    function closeQuizModal() {
+      document.getElementById('quizModal').classList.add('hidden');
+    }
+
+    function switchStudyTab(tab) {
+      const isQuiz = tab === 'quiz';
+      document.getElementById('studyTabBtnQuiz').className = isQuiz ? 'pb-3 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600' : 'pb-3 text-xs font-bold border-b-2 border-transparent text-slate-500';
+      document.getElementById('studyTabBtnFlashcards').className = !isQuiz ? 'pb-3 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600' : 'pb-3 text-xs font-bold border-b-2 border-transparent text-slate-500';
+      document.getElementById('quizQuestionsContainer').classList.toggle('hidden', !isQuiz);
+      document.getElementById('flashcardsContainer').classList.toggle('hidden', isQuiz);
+    }
+
+    function renderQuizQuestions(quiz) {
+      document.getElementById('quizCountBadge').textContent = quiz.length;
+      const container = document.getElementById('quizQuestionsContainer');
+      container.innerHTML = quiz.map((q, qIdx) => `
+        <div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+          <div class="font-bold text-slate-900 text-sm">Q${qIdx + 1}: ${q.question}</div>
+          <div class="space-y-2">
+            ${q.options.map((opt, optIdx) => `
+              <button onclick="selectQuizAnswer(${qIdx}, ${optIdx}, ${q.correctIndex})" id="quizOpt-${qIdx}-${optIdx}"
+                class="w-full text-left p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs text-slate-700 transition">
+                <span class="font-bold mr-2 text-slate-400">${['A', 'B', 'C', 'D'][optIdx] || optIdx + 1}.</span> ${opt}
+              </button>
+            `).join('')}
+          </div>
+          <div id="quizExplain-${qIdx}" class="hidden p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900">
+            <div class="font-bold mb-1">Explanation:</div>
+            <div>${q.explanation}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectQuizAnswer(qIdx, selectedIdx, correctIdx) {
+      const buttons = document.querySelectorAll(`[id^="quizOpt-${qIdx}-"]`);
+      buttons.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (idx === correctIdx) {
+          btn.className = 'w-full text-left p-3 rounded-xl border border-emerald-400 bg-emerald-50 text-xs font-semibold text-emerald-900';
+        } else if (idx === selectedIdx && selectedIdx !== correctIdx) {
+          btn.className = 'w-full text-left p-3 rounded-xl border border-rose-400 bg-rose-50 text-xs font-semibold text-rose-900';
+        } else {
+          btn.className = 'w-full text-left p-3 rounded-xl border border-slate-200 bg-white text-xs opacity-50';
+        }
+      });
+      const explain = document.getElementById(`quizExplain-${qIdx}`);
+      if (explain) explain.classList.remove('hidden');
+    }
+
+    function renderFlashcards(flashcards) {
+      document.getElementById('flashcardCountBadge').textContent = flashcards.length;
+      const container = document.getElementById('flashcardsContainer');
+      container.innerHTML = flashcards.map((f, idx) => `
+        <div onclick="toggleFlashcard(${idx})" id="flashcard-${idx}"
+          class="p-6 bg-gradient-to-tr from-indigo-50 to-white border border-indigo-200 rounded-2xl shadow-xs cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] text-center select-none group">
+          <div class="text-xs font-bold text-indigo-500 uppercase tracking-wider">Card #${idx + 1} • Click to Flip</div>
+          <div id="flashcardFront-${idx}" class="text-slate-900 font-bold text-base my-auto">${f.front}</div>
+          <div id="flashcardBack-${idx}" class="hidden text-slate-700 text-xs my-auto prose max-w-none">${f.back}</div>
+          <div class="text-xs text-slate-400 pt-2 group-hover:text-indigo-600 transition">↻ Click to flip</div>
+        </div>
+      `).join('');
+    }
+
+    function toggleFlashcard(idx) {
+      const front = document.getElementById(`flashcardFront-${idx}`);
+      const back = document.getElementById(`flashcardBack-${idx}`);
+      front.classList.toggle('hidden');
+      back.classList.toggle('hidden');
     }
 
     function closeSessionDetailModal() {
@@ -935,11 +1143,11 @@
         };
 
         liveSocket.onerror = (err) => {
-          console.error('WS Error:', err);
-          showToast('WebSocket error occurred', 'error');
+          console.warn('WS Error:', err);
         };
 
-        liveSocket.onclose = () => {
+        liveSocket.onclose = (event) => {
+          console.warn('WS Closed:', event.code, event.reason);
           badge.textContent = 'Disconnected';
           badge.className = 'px-3 py-1 bg-slate-100 text-slate-600 text-xs font-semibold rounded-full border border-slate-200';
           document.getElementById('btnConnectWs').classList.remove('hidden');
@@ -948,6 +1156,15 @@
           document.getElementById('btnSendText').disabled = true;
           document.getElementById('btnSendQuestion').disabled = true;
           stopMicrophone();
+
+          if (event.code === 4401) {
+            showToast('Session expired or unauthorized. Please log in again.', 'warning');
+            openAuthModal('login');
+          } else if (event.code === 4404) {
+            showToast(event.reason || 'Session not found or belongs to another account.', 'error');
+          } else if (event.code !== 1000 && event.code !== 1005) {
+            showToast(event.reason || `WebSocket disconnected (code ${event.code})`, 'error');
+          }
         };
       } catch (err) {
         showToast(err.message, 'error');
@@ -965,6 +1182,10 @@
     let liveNoteBlocksMap = new Map();
 
     function handleWsIncoming(data) {
+      if (data.type === 'ERROR') {
+        showToast(data.message || 'Server error occurred', 'error');
+        return;
+      }
       if (data.type === 'TRANSCRIPT_FINAL' || data.type === 'TRANSCRIPT' || (data.chunk && data.chunk.text)) {
         const text = data.chunk?.text || data.text;
         appendTranscriptLog(text);
