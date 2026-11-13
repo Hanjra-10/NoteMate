@@ -44,6 +44,10 @@ const server = http.createServer(app);
 initWebSocketServer(server);
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-    console.log(`Backend Server running on port ${PORT}`);
-});
+if (!process.env.VERCEL) {
+    server.listen(PORT, () => {
+        console.log(`Backend Server running on port ${PORT}`);
+    });
+}
+
+export default app;
