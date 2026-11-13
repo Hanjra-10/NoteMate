@@ -122,11 +122,6 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         <span>AI Q&A Assistant</span>
       </button>
-
-      <button onclick="switchTab('status')" id="tabBtn-status" class="tab-btn px-4 py-2.5 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center space-x-2">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <span>System Status</span>
-      </button>
     </div>
 
     <!-- TAB 1: SUBJECTS & SESSIONS -->
@@ -401,66 +396,6 @@
       </div>
     </div>
 
-    <!-- TAB 4: SYSTEM STATUS -->
-    <div id="tabContent-status" class="hidden space-y-6">
-      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
-        <div>
-          <h2 class="text-lg font-bold text-slate-900">Backend Infrastructure Status</h2>
-          <p class="text-sm text-slate-500">Live health indicators for the services powering NoteMate</p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-800">Express Backend</span>
-              <span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-full">ACTIVE</span>
-            </div>
-            <div class="text-xs text-slate-500">Port 8080 (REST API & WS Server)</div>
-          </div>
-
-          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-800">Supabase PostgreSQL</span>
-              <span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-full">CONNECTED</span>
-            </div>
-            <div class="text-xs text-slate-500">Prisma Client v6.19 (pgvector enabled)</div>
-          </div>
-
-          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-800">Upstash Redis</span>
-              <span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-full">CONNECTED</span>
-            </div>
-            <div class="text-xs text-slate-500">Streams & Caching active</div>
-          </div>
-
-          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-800">Gemini AI Models</span>
-              <span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-full">CONFIGURED</span>
-            </div>
-            <div class="text-xs text-slate-500">Gemini Note Engine & RAG embedding</div>
-          </div>
-
-          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-800">Sarvam AI Speech</span>
-              <span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-full">CONFIGURED</span>
-            </div>
-            <div class="text-xs text-slate-500">Live Speech-to-Text Transcription</div>
-          </div>
-
-          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-800">JWT Authentication</span>
-              <span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-full">SECURE</span>
-            </div>
-            <div class="text-xs text-slate-500">Bcrypt + HMAC SHA-256 Tokens</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </main>
 
   <!-- Auth Modal -->
@@ -561,7 +496,7 @@
         activeBtn.classList.remove('border-transparent', 'text-slate-500');
       }
 
-      ['subjects', 'live', 'rag', 'status'].forEach(id => {
+      ['subjects', 'live', 'rag'].forEach(id => {
         const content = document.getElementById(`tabContent-${id}`);
         if (content) {
           content.classList.toggle('hidden', id !== tabId);
